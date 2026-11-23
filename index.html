@@ -298,15 +298,32 @@ $('hDel').onclick = () => {
   how = 'delivery'; renderSheet();
 };
 
-function submit() {
+const API = 'https://worker-production-6355a0a9.up.railway.app/order';
+let sending = false;
+async function submit() {
+  if (sending) return;
   const phone = $('phone').value.trim(), addr = $('addr').value.trim();
   const fail = m => { $('err').textContent = m; haptic('err'); toast(m); };
   if ((phone.match(/\d/g) || []).length < 10) return fail('Укажите номер телефона полностью');
   if (how === 'delivery' && addr.length < 5) return fail('Укажите адрес доставки');
-  if (!tg) return fail('Откройте меню через кнопку в боте');
-  const data = JSON.stringify({v: 1, cart, how, address: how === 'delivery' ? addr : '', phone, comment: $('comment').value.trim()});
-  cart = {}; saveCart();
-  tg.sendData(data);
+  if (!tg) return fail('Откройте меню через бота в Telegram');
+  const order = {v: 1, cart, how, address: how === 'delivery' ? addr : '', phone, comment: $('comment').value.trim()};
+  sending = true; $('barL').textContent = 'Отправляем…';
+  let r = null, j = {};
+  try {
+    r = await fetch(API, {method: 'POST', headers: {'Content-Type': 'application/json'},
+                          body: JSON.stringify({initData: tg.initData, order})});
+    j = await r.json().catch(() => ({}));
+  } catch (e) { r = null; }
+  if (r && r.ok && j.ok) {
+    cart = {}; saveCart();
+    try { tg.HapticFeedback.notificationOccurred('success'); } catch (e) {}
+    tg.showAlert('✅ ' + j.text + '. Подтверждение придёт в чат с ботом.', () => tg.close());
+    return;
+  }
+  if (r && j.error) { sending = false; updBar(); return fail(j.error); }
+  try { tg.sendData(JSON.stringify(order)); cart = {}; saveCart(); }  // запасной путь: приложение открыто нижней кнопкой
+  catch (e) { sending = false; updBar(); fail('Нет связи. Попробуйте ещё раз'); }
 }
 </script>
 </body>
