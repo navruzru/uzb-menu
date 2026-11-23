@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Узбекская кухня</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{--bg:#16110d;--card:#231a14;--line:#3a2d23;--text:#f5ebde;--muted:#a8927e;--accent:#e8a33d;--accent2:#c9562c}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.35 -apple-system,system-ui,Roboto,sans-serif;padding-bottom:90px}
+header{padding:18px 16px 6px}
+h1{margin:0;font-size:24px}
+.sub{color:var(--muted);font-size:13px;margin-top:4px}
+nav{position:sticky;top:0;z-index:5;background:var(--bg);display:flex;gap:8px;overflow-x:auto;padding:10px 16px;scrollbar-width:none}
+nav::-webkit-scrollbar{display:none}
+nav button{flex:none;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:20px;padding:8px 14px;font-size:14px}
+nav button.on{background:var(--accent);color:#1b120a;border-color:var(--accent);font-weight:600}
+h2{font-size:19px;margin:18px 16px 10px}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;padding:0 16px}
+@media(min-width:560px){.grid{grid-template-columns:repeat(3,1fr)}}
+.card{background:var(--card);border-radius:16px;overflow:hidden;display:flex;flex-direction:column}
+.card img{width:100%;aspect-ratio:1;object-fit:cover;display:block;background:#1d1611}
+.card .b{padding:8px 10px 10px;display:flex;flex-direction:column;gap:8px;flex:1}
+.card .t{font-size:14px;font-weight:600;flex:1}
+.row{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.price{font-weight:700;color:var(--accent)}
+.add{border:0;background:var(--accent);color:#1b120a;font-weight:700;border-radius:10px;padding:7px 12px;font-size:14px}
+.qty{display:flex;align-items:center;gap:8px}
+.qty button{width:30px;height:30px;border-radius:9px;border:0;background:#3a2d23;color:var(--text);font-size:18px;line-height:1}
+.qty span{min-width:16px;text-align:center;font-weight:700}
+#bar{position:fixed;left:12px;right:12px;bottom:12px;z-index:30;display:none}
+#bar button{width:100%;border:0;border-radius:14px;padding:15px;background:var(--accent);color:#1b120a;font-size:16px;font-weight:700}
+#sheet{position:fixed;inset:0;z-index:20;background:var(--bg);overflow-y:auto;display:none;padding:16px 16px 100px}
+#sheet h3{margin:4px 0 14px;font-size:21px}
+.line{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);gap:10px}
+.line img{width:48px;height:48px;border-radius:10px;object-fit:cover}
+.line .n{flex:1}
+.tot{display:flex;justify-content:space-between;font-size:18px;font-weight:700;margin:14px 0}
+label{display:block;color:var(--muted);font-size:13px;margin:14px 0 6px}
+input,textarea{width:100%;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:12px;padding:12px;font:inherit}
+.seg{display:flex;gap:8px}
+.seg button{flex:1;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:12px;padding:11px;font-size:14px}
+.seg button.on{border-color:var(--accent);color:var(--accent);font-weight:600}
+.seg button:disabled{opacity:.45}
+.note{color:var(--muted);font-size:13px;margin-top:8px}
+.err{color:#ff8a6a;font-size:13px;margin-top:8px;min-height:18px}
+.back{border:0;background:none;color:var(--accent);font-size:15px;padding:0;margin-bottom:10px}
+</style>
+</head>
+<body>
+<header><h1 id="title">Узбекская кухня</h1><div class="sub" id="sub"></div></header>
+<nav id="nav"></nav>
+<main id="menu"></main>
+<div id="bar"><button id="barBtn"></button></div>
+
+<section id="sheet">
+  <button class="back" id="back">‹ Меню</button>
+  <h3>Ваш заказ</h3>
+  <div id="lines"></div>
+  <div class="tot"><span>Итого</span><span id="total"></span></div>
+  <label>Как получить</label>
+  <div class="seg"><button id="hPick" class="on">🛍 Заберу сам</button><button id="hDel">🚗 Доставка</button></div>
+  <div class="note" id="howNote"></div>
+  <div id="addrBox" style="display:none"><label>Адрес: дом, корпус, подъезд, квартира</label><input id="addr" maxlength="300"></div>
+  <label>Телефон</label><input id="phone" type="tel" inputmode="tel" placeholder="+7 ___ ___-__-__" maxlength="25">
+  <label>Комментарий</label><textarea id="comment" rows="2" maxlength="300" placeholder="Например: без лука, к 19:30"></textarea>
+  <div class="note">Оплата при получении.</div>
+  <div class="err" id="err"></div>
+</section>
+
+<script>
+const tg = window.Telegram && Telegram.WebApp && Telegram.WebApp.initData ? Telegram.WebApp : null;
+if (tg) { tg.ready(); tg.expand(); try { tg.setHeaderColor('#16110d'); tg.setBackgroundColor('#16110d'); } catch (e) {} }
+const rub = n => n.toLocaleString('ru-RU') + ' ₽';
+let M, items = {}, cart = {}, how = 'pickup';
+try { cart = JSON.parse(localStorage.getItem('cart') || '{}'); } catch (e) {}
+const saveCart = () => { try { localStorage.setItem('cart', JSON.stringify(cart)); } catch (e) {} };
+const $ = id => document.getElementById(id);
+
+fetch('menu.json').then(r => r.json()).then(m => { M = m; init(); });
+
+function init() {
+  $('title').textContent = M.title;
+  $('sub').textContent = `📍 ${M.address} · 🕐 ${M.hours}`;
+  const nav = $('nav'), menu = $('menu');
+  M.categories.forEach((c, i) => {
+    c.items.forEach(it => items[it.id] = it);
+    const b = document.createElement('button');
+    b.textContent = c.title; b.onclick = () => $('c' + i).scrollIntoView({behavior: 'smooth'});
+    nav.appendChild(b);
+    const sec = document.createElement('section');
+    sec.id = 'c' + i;
+    sec.innerHTML = `<h2>${c.title}</h2><div class="grid">${c.items.map(card).join('')}</div>`;
+    menu.appendChild(sec);
+  });
+  for (const id in cart) if (!items[id]) delete cart[id];
+  menu.onclick = e => {
+    const t = e.target.closest('[data-a]'); if (!t) return;
+    const id = t.dataset.id;
+    cart[id] = (cart[id] || 0) + (t.dataset.a === '+' ? 1 : -1);
+    if (cart[id] <= 0) delete cart[id];
+    if (tg && tg.HapticFeedback) tg.HapticFeedback.selectionChanged();
+    refresh(id);
+  };
+  const io = new IntersectionObserver(es => es.forEach(en => {
+    if (en.isIntersecting) [...nav.children].forEach((b, i) => b.classList.toggle('on', 'c' + i === en.target.id));
+  }), {rootMargin: '-45% 0px -50% 0px'});
+  document.querySelectorAll('main section').forEach(s => io.observe(s));
+  Object.keys(items).forEach(refresh);
+}
+
+function card(it) {
+  const img = it.img ? `<img src="${it.img}" alt="" loading="lazy">` : `<img alt="">`;
+  return `<div class="card">${img}<div class="b"><div class="t">${it.title}</div>
+    <div class="row"><span class="price">${rub(it.price)}</span><span id="q_${it.id}"></span></div></div></div>`;
+}
+
+function ctrl(id) {
+  const q = cart[id] || 0;
+  return q ? `<span class="qty"><button data-a="-" data-id="${id}">−</button><span>${q}</span><button data-a="+" data-id="${id}">+</button></span>`
+           : `<button class="add" data-a="+" data-id="${id}">+</button>`;
+}
+
+const total = () => Object.entries(cart).reduce((s, [id, q]) => s + items[id].price * q, 0);
+const count = () => Object.values(cart).reduce((s, q) => s + q, 0);
+
+function refresh(id) {
+  const el = $('q_' + id); if (el) el.innerHTML = ctrl(id);
+  saveCart(); updBar();
+}
+
+function updBar() {
+  const n = count(), sheetOpen = $('sheet').style.display === 'block';
+  if (tg && tg.MainButton) {
+    if (!n && !sheetOpen) tg.MainButton.hide();
+    else { tg.MainButton.setText(sheetOpen ? `Заказать · ${rub(total())}` : `Корзина · ${n} · ${rub(total())}`); tg.MainButton.show(); }
+  } else {
+    $('bar').style.display = n || sheetOpen ? 'block' : 'none';
+    $('barBtn').textContent = sheetOpen ? `Заказать · ${rub(total())}` : `🛒 Корзина · ${n} · ${rub(total())}`;
+  }
+}
+
+function mainAction() { $('sheet').style.display === 'block' ? submit() : openSheet(); }
+if (tg && tg.MainButton) { tg.MainButton.setParams({color: '#e8a33d', text_color: '#1b120a'}); tg.MainButton.onClick(mainAction); }
+$('barBtn').onclick = mainAction;
+
+function openSheet() {
+  if (!count()) return;
+  $('sheet').style.display = 'block'; window.scrollTo(0, 0);
+  if (tg && tg.BackButton) tg.BackButton.show();
+  renderSheet();
+}
+function closeSheet() {
+  $('sheet').style.display = 'none';
+  if (tg && tg.BackButton) tg.BackButton.hide();
+  Object.keys(items).forEach(id => { const el = $('q_' + id); if (el) el.innerHTML = ctrl(id); });
+  updBar();
+}
+$('back').onclick = closeSheet;
+if (tg && tg.BackButton) tg.BackButton.onClick(closeSheet);
+
+function renderSheet() {
+  if (!count()) return closeSheet();
+  $('lines').innerHTML = Object.entries(cart).map(([id, q]) => {
+    const it = items[id];
+    return `<div class="line">${it.img ? `<img src="${it.img}" alt="">` : ''}<div class="n">${it.title}<div class="note">${rub(it.price * q)}</div></div>${ctrl(id)}</div>`;
+  }).join('');
+  $('total').textContent = rub(total());
+  const d = M.delivery, ok = d.enabled && total() >= d.min_sum;
+  $('hDel').disabled = !d.enabled;
+  if (how === 'delivery' && !ok) how = 'pickup';
+  $('hPick').classList.toggle('on', how === 'pickup');
+  $('hDel').classList.toggle('on', how === 'delivery');
+  $('addrBox').style.display = how === 'delivery' ? 'block' : 'none';
+  $('howNote').textContent = how === 'pickup' ? `Самовывоз: ${M.address}`
+    : `Доставка: ${d.zone}`;
+  if (d.enabled && !ok) $('howNote').textContent += ` · доставка от ${rub(d.min_sum)}`;
+  updBar();
+}
+$('lines').onclick = e => {
+  const t = e.target.closest('[data-a]'); if (!t) return;
+  const id = t.dataset.id; cart[id] = (cart[id] || 0) + (t.dataset.a === '+' ? 1 : -1);
+  if (cart[id] <= 0) delete cart[id]; saveCart(); renderSheet();
+};
+$('hPick').onclick = () => { how = 'pickup'; renderSheet(); };
+$('hDel').onclick = () => {
+  if (total() < M.delivery.min_sum) { $('err').textContent = `Доставка — от ${rub(M.delivery.min_sum)}`; return; }
+  how = 'delivery'; $('err').textContent = ''; renderSheet();
+};
+
+function submit() {
+  const phone = $('phone').value.trim(), addr = $('addr').value.trim();
+  if ((phone.match(/\d/g) || []).length < 10) { $('err').textContent = 'Укажите номер телефона полностью'; return; }
+  if (how === 'delivery' && addr.length < 5) { $('err').textContent = 'Укажите адрес доставки'; return; }
+  const data = JSON.stringify({v: 1, cart, how, address: how === 'delivery' ? addr : '', phone, comment: $('comment').value.trim()});
+  if (!tg || !tg.initData) { $('err').textContent = 'Откройте меню через кнопку в боте'; console.log(data); return; }
+  cart = {}; saveCart();
+  tg.sendData(data);
+}
+</script>
+</body>
+</html>
