@@ -66,6 +66,8 @@ input,textarea{width:100%;border:1px solid var(--line);background:var(--card);co
   <label>Телефон</label><input id="phone" type="tel" inputmode="tel" placeholder="+7 ___ ___-__-__" maxlength="25">
   <label>Комментарий</label><textarea id="comment" rows="2" maxlength="300" placeholder="Например: без лука, к 19:30"></textarea>
   <div class="note">Оплата при получении.</div>
+  <label style="display:flex;gap:10px;align-items:flex-start;color:var(--text);font-size:13px"><input type="checkbox" id="agree" style="width:20px;height:20px;flex:none;margin:0">
+    <span>Согласен(на) на обработку имени, телефона и адреса для выполнения заказа — <a href="privacy.html" style="color:var(--accent)">политика</a>. Данные удаляются после выполнения заказа.</span></label>
   <div class="err" id="err"></div>
 </section>
 
@@ -192,6 +194,7 @@ $('hDel').onclick = () => {
 function submit() {
   const phone = $('phone').value.trim(), addr = $('addr').value.trim();
   if ((phone.match(/\d/g) || []).length < 10) { $('err').textContent = 'Укажите номер телефона полностью'; return; }
+  if (!$('agree').checked) { $('err').textContent = 'Отметьте согласие на обработку данных'; return; }
   if (how === 'delivery' && addr.length < 5) { $('err').textContent = 'Укажите адрес доставки'; return; }
   const data = JSON.stringify({v: 1, cart, how, address: how === 'delivery' ? addr : '', phone, comment: $('comment').value.trim()});
   if (!tg || !tg.initData) { $('err').textContent = 'Откройте меню через кнопку в боте'; console.log(data); return; }
