@@ -120,6 +120,13 @@ input:focus,textarea:focus{border-color:var(--gold)}
 .note a{color:var(--gold)}
 .err{color:#ff9f80;font-size:13px;margin-top:6px;min-height:18px;font-weight:700}
 
+#done{position:fixed;inset:0;z-index:60;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;
+  background:radial-gradient(90% 50% at 50% 30%,rgba(196,110,45,.55),rgba(196,110,45,0) 70%),#0f0905}
+#done .lbl{color:var(--muted);font-weight:800;letter-spacing:.12em;text-transform:uppercase;font-size:13px}
+#done .num{font-family:var(--disp);font-weight:800;font-size:96px;line-height:1;margin:10px 0 6px;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+#done h3{font-family:var(--disp);font-size:24px;margin:8px 0 10px}
+#done p{color:var(--muted);font-size:15px;max-width:320px;margin:0 0 26px;line-height:1.45}
+#done button{border:0;border-radius:20px;padding:17px 34px;background:#fbf1e4;color:#3a1d0c;font-size:16px;font-weight:800}
 #toast{position:fixed;left:50%;top:14px;transform:translate(-50%,-160%);z-index:50;width:max-content;max-width:92vw;text-align:center;
   background:linear-gradient(160deg,#6a3a18,#3a200d);border:1px solid rgba(255,200,140,.45);color:var(--text);border-radius:18px;padding:13px 18px;
   font-weight:800;font-size:14px;box-shadow:0 16px 40px -10px rgba(0,0,0,.7);transition:transform .35s cubic-bezier(.2,.8,.2,1)}
@@ -165,6 +172,8 @@ input:focus,textarea:focus{border-color:var(--gold)}
   <div class="note">Телефон и адрес нужны только для выполнения заказа и удаляются после него. <a href="privacy.html">Политика обработки данных</a></div>
 </section>
 <div id="toast"></div>
+<section id="done"><div class="lbl">Ваш номер заказа</div><div class="num" id="doneNum"></div>
+  <h3>Заказ принят! 🎉</h3><p id="doneTxt"></p><button id="doneBtn">Готово</button></section>
 
 <script>
 const T = window.Telegram && Telegram.WebApp;
@@ -318,7 +327,13 @@ async function submit() {
   if (r && r.ok && j.ok) {
     cart = {}; saveCart();
     try { tg.HapticFeedback.notificationOccurred('success'); } catch (e) {}
-    tg.showAlert('✅ ' + j.text + '. Подтверждение придёт в чат с ботом.', () => tg.close());
+    $('doneNum').textContent = '№' + j.id;
+    $('doneTxt').textContent = how === 'pickup'
+      ? 'Назовите этот номер на кассе, когда придёте за заказом. Номер и статус придут в чат с ботом.'
+      : 'Курьер привезёт заказ по вашему адресу. Номер и статус придут в чат с ботом.';
+    $('done').style.display = 'flex'; $('bar').style.display = 'none';
+    if (tg.MainButton) tg.MainButton.hide();
+    $('doneBtn').onclick = () => tg.close();
     return;
   }
   if (r && j.error) { sending = false; updBar(); return fail(j.error); }
