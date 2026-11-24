@@ -185,8 +185,9 @@ if (tg) { tg.ready(); tg.expand(); try { tg.setHeaderColor('#2a170b'); tg.setBac
 const rub = n => n.toLocaleString('ru-RU') + ' ₽';
 const $ = id => document.getElementById(id);
 let M, items = {}, cart = {}, how = 'pickup';
-try { cart = JSON.parse(localStorage.getItem('cart') || '{}'); } catch (e) {}
-const saveCart = () => { try { localStorage.setItem('cart', JSON.stringify(cart)); } catch (e) {} };
+// корзина живёт только пока открыто меню: закрыл — при следующем открытии всё с нуля
+try { localStorage.removeItem('cart'); } catch (e) {}
+const saveCart = () => {};
 const haptic = t => { try { tg && tg.HapticFeedback && (t === 'err' ? tg.HapticFeedback.notificationOccurred('error') : tg.HapticFeedback.impactOccurred('light')); } catch (e) {} };
 let toastT;
 function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 2800); }
