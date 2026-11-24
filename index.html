@@ -195,12 +195,18 @@ let evq = [], evt = null;
 function track(e, x) {
   if (!tg) return;
   evq.push({e, x: x || '', n: count(), sum: total()});
-  clearTimeout(evt); evt = setTimeout(flushEv, 1500);
+  clearTimeout(evt); evt = setTimeout(flushEv, e === 'open' ? 50 : 700);
 }
-function flushEv() {
+function flushEv(final) {
   if (!evq.length || !tg) return;
   const body = JSON.stringify({initData: tg.initData, events: evq.splice(0, 20)});
-  try { navigator.sendBeacon(EV_URL, new Blob([body], {type: 'text/plain'})); } catch (e) {}
+  // основной путь — fetch (работает во всех клиентах Telegram); при закрытии — ещё и sendBeacon
+  try {
+    fetch(EV_URL, {method: 'POST', body, keepalive: true, mode: 'no-cors', headers: {'Content-Type': 'text/plain'}})
+      .catch(() => { try { navigator.sendBeacon(EV_URL, new Blob([body], {type: 'text/plain'})); } catch (e) {} });
+  } catch (e) {
+    try { navigator.sendBeacon(EV_URL, new Blob([body], {type: 'text/plain'})); } catch (e2) {}
+  }
 }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { track('close'); flushEv(); } });
 
