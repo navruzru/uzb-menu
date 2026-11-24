@@ -189,6 +189,21 @@ let toastT;
 function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 2800); }
 function shake(el) { el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); }
 
+// 📡 эфир для владельца: события копятся и уходят пачкой раз в 1,5 с
+const EV_URL = 'https://worker-production-6355a0a9.up.railway.app/event';
+let evq = [], evt = null;
+function track(e, x) {
+  if (!tg) return;
+  evq.push({e, x: x || '', n: count(), sum: total()});
+  clearTimeout(evt); evt = setTimeout(flushEv, 1500);
+}
+function flushEv() {
+  if (!evq.length || !tg) return;
+  const body = JSON.stringify({initData: tg.initData, events: evq.splice(0, 20)});
+  try { navigator.sendBeacon(EV_URL, new Blob([body], {type: 'text/plain'})); } catch (e) {}
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { track('close'); flushEv(); } });
+
 fetch('menu.json').then(r => r.json()).then(m => { M = m; init(); });
 
 function init() {
@@ -199,7 +214,7 @@ function init() {
   M.categories.forEach((c, i) => {
     c.items.forEach(it => items[it.id] = it);
     const b = document.createElement('button');
-    b.textContent = c.title; b.onclick = () => window.scrollTo({top: $('c' + i).offsetTop - 64, behavior: 'smooth'});
+    b.textContent = c.title; b.onclick = () => (track('tab', c.title.replace(/^\S+\s/, '')), 0) || window.scrollTo({top: $('c' + i).offsetTop - 64, behavior: 'smooth'});
     nav.appendChild(b);
     const sec = document.createElement('section');
     sec.id = 'c' + i;
@@ -213,6 +228,7 @@ function init() {
   }), {rootMargin: '-40% 0px -55% 0px'});
   document.querySelectorAll('main section').forEach(s => io.observe(s));
   Object.keys(items).forEach(paint); updBar();
+  track('open');
 }
 
 function card(it) {
@@ -234,6 +250,7 @@ function change(id, a) {
   cart[id] = (cart[id] || 0) + (a === '+' ? 1 : -1);
   if (cart[id] <= 0) delete cart[id];
   saveCart(); haptic(); paint(id);
+  track(a === '+' ? 'add' : 'remove', id);
   const min = M.delivery.min_sum;
   if (M.delivery.enabled && before < min && total() >= min) toast('🎉 Доставка доступна!');
   if (sheetOpen()) renderSheet(); else updBar();
@@ -264,11 +281,12 @@ $('barBtn').onclick = () => sheetOpen() ? submit() : openSheet();
 
 function openSheet() {
   if (!count()) return;
-  $('sheet').style.display = 'block'; $('sheet').scrollTop = 0;
+  $('sheet').style.display = 'block'; $('sheet').scrollTop = 0; track('cart');
   if (tg && tg.BackButton) tg.BackButton.show();
   renderSheet();
 }
 function closeSheet() {
+  if (sheetOpen()) track('close_cart');
   $('sheet').style.display = 'none';
   if (tg && tg.BackButton) tg.BackButton.hide();
   Object.keys(items).forEach(paint); updBar();
@@ -296,15 +314,16 @@ function renderSheet() {
   updBar();
 }
 $('lines').onclick = e => { const t = e.target.closest('[data-a]'); if (t) change(t.dataset.id, t.dataset.a); };
-$('hPick').onclick = () => { how = 'pickup'; $('err').textContent = ''; renderSheet(); };
+$('hPick').onclick = () => { track('pickup'); how = 'pickup'; $('err').textContent = ''; renderSheet(); };
 $('hDel').onclick = () => {
   const d = M.delivery, left = d.min_sum - total();
   if (!d.enabled) return toast('Доставка сейчас недоступна');
   if (left > 0) {
+    track('delivery_locked');
     haptic('err'); shake($('hDel')); shake($('sheetProg'));
     return toast(`🚗 Доставка — от ${rub(d.min_sum)}. Добавьте ещё на ${rub(left)}`);
   }
-  how = 'delivery'; renderSheet();
+  how = 'delivery'; track('delivery'); renderSheet();
 };
 
 const API = 'https://worker-production-6355a0a9.up.railway.app/order';
@@ -312,7 +331,8 @@ let sending = false;
 async function submit() {
   if (sending) return;
   const phone = $('phone').value.trim(), addr = $('addr').value.trim();
-  const fail = m => { $('err').textContent = m; haptic('err'); toast(m); };
+  const fail = m => { $('err').textContent = m; haptic('err'); toast(m); track('error', m); flushEv(); };
+  track('submit');
   if ((phone.match(/\d/g) || []).length < 10) return fail('Укажите номер телефона полностью');
   if (how === 'delivery' && addr.length < 5) return fail('Укажите адрес доставки');
   if (!tg) return fail('Откройте меню через бота в Telegram');
