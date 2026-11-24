@@ -177,7 +177,10 @@ input:focus,textarea:focus{border-color:var(--gold)}
 
 <script>
 const T = window.Telegram && Telegram.WebApp;
-const tg = T && T.initData ? T : null;
+// tg — открыто внутри Telegram (из любой кнопки); signed — есть подписанные данные пользователя
+// (inline-кнопка, «Меню», «Открыть» в профиле). Из старой нижней клавиатуры initData пустой.
+const tg = T && (T.initData || (T.platform && T.platform !== 'unknown')) ? T : null;
+const signed = !!(tg && tg.initData);
 if (tg) { tg.ready(); tg.expand(); try { tg.setHeaderColor('#2a170b'); tg.setBackgroundColor('#0f0905'); } catch (e) {} }
 const rub = n => n.toLocaleString('ru-RU') + ' ₽';
 const $ = id => document.getElementById(id);
@@ -193,12 +196,12 @@ function shake(el) { el.classList.remove('shake'); void el.offsetWidth; el.class
 const EV_URL = 'https://worker-production-6355a0a9.up.railway.app/event';
 let evq = [], evt = null;
 function track(e, x) {
-  if (!tg) return;
+  if (!signed) return;
   evq.push({e, x: x || '', n: count(), sum: total()});
   clearTimeout(evt); evt = setTimeout(flushEv, e === 'open' ? 50 : 700);
 }
 function flushEv(final) {
-  if (!evq.length || !tg) return;
+  if (!evq.length || !signed) return;
   const body = JSON.stringify({initData: tg.initData, events: evq.splice(0, 20)});
   // основной путь — fetch (работает во всех клиентах Telegram); при закрытии — ещё и sendBeacon
   try {
@@ -344,6 +347,10 @@ async function submit() {
   if (!tg) return fail('Откройте меню через бота в Telegram');
   const order = {v: 1, cart, how, address: how === 'delivery' ? addr : '', phone, comment: $('comment').value.trim()};
   sending = true; $('barL').textContent = 'Отправляем…';
+  if (!signed) {  // старая нижняя кнопка: только sendData
+    try { tg.sendData(JSON.stringify(order)); cart = {}; saveCart(); return; }
+    catch (e) { sending = false; updBar(); return fail('Не получилось. Откройте меню кнопкой под сообщением бота'); }
+  }
   let r = null, j = {};
   try {
     r = await fetch(API, {method: 'POST', headers: {'Content-Type': 'application/json'},
