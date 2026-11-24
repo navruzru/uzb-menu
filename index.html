@@ -278,7 +278,12 @@ function init() {
     menu.appendChild(sec);
   });
   for (const id in cart) if (!items[id]) delete cart[id];
-  menu.onclick = e => { const t = e.target.closest('[data-a]'); if (t) change(t.dataset.id, t.dataset.a); };
+  menu.onclick = e => {
+    const t = e.target.closest('[data-a]');
+    if (t) return change(t.dataset.id, t.dataset.a);
+    const c = e.target.closest('.card');  // нажал на фото / название блюда
+    if (c) { const id = (c.querySelector('[id^="q_"]') || {}).id; if (id) track('tap', id.slice(2)); }
+  };
   const io = new IntersectionObserver(es => es.forEach(en => {
     if (en.isIntersecting) [...nav.children].forEach((b, i) => b.classList.toggle('on', 'c' + i === en.target.id));
   }), {rootMargin: '-40% 0px -55% 0px'});
@@ -301,12 +306,12 @@ function paint(id) {
   const el = $('q_' + id); if (el) el.innerHTML = ctrl(id);
   const tb = $('tb_' + id); if (tb) { tb.textContent = `в корзине: ${cart[id] || 0}`; tb.classList.toggle('on', !!cart[id]); }
 }
-function change(id, a) {
+function change(id, a, where) {
   const before = total();
   cart[id] = (cart[id] || 0) + (a === '+' ? 1 : -1);
   if (cart[id] <= 0) delete cart[id];
   saveCart(); haptic(); paint(id);
-  track(a === '+' ? 'add' : 'remove', id);
+  track(a === '+' ? (where ? 'add_cart' : 'add') : (where ? 'remove_cart' : 'remove'), id);
   const min = M.delivery.min_sum;
   if (M.delivery.enabled && before < min && total() >= min) toast('🎉 Доставка доступна!');
   if (sheetOpen()) renderSheet(); else updBar();
@@ -334,6 +339,7 @@ function updBar() {
   $('barR').textContent = rub(total());
 }
 $('barBtn').onclick = () => sheetOpen() ? submit() : openSheet();
+document.querySelectorAll('.perk').forEach(p => p.addEventListener('click', () => track('perk', p.textContent.trim().split(/\s+/)[1] || '')));
 
 function openSheet() {
   if (!count()) return;
@@ -347,7 +353,7 @@ function closeSheet() {
   if (tg && tg.BackButton) tg.BackButton.hide();
   Object.keys(items).forEach(paint); updBar();
 }
-$('back').onclick = closeSheet;
+$('back').onclick = () => { track('back'); closeSheet(); };
 if (tg && tg.BackButton) tg.BackButton.onClick(closeSheet);
 
 function renderSheet() {
@@ -369,7 +375,7 @@ function renderSheet() {
   $('addrBox').style.display = how === 'delivery' ? 'block' : 'none';
   updBar();
 }
-$('lines').onclick = e => { const t = e.target.closest('[data-a]'); if (t) change(t.dataset.id, t.dataset.a); };
+$('lines').onclick = e => { const t = e.target.closest('[data-a]'); if (t) change(t.dataset.id, t.dataset.a, 'cart'); };
 $('hPick').onclick = () => { track('pickup'); how = 'pickup'; $('err').textContent = ''; renderSheet(); };
 $('hDel').onclick = () => {
   const d = M.delivery, left = d.min_sum - total();
@@ -413,7 +419,7 @@ async function submit() {
       : 'Курьер привезёт заказ по вашему адресу. Номер и статус придут в чат с ботом.';
     $('done').style.display = 'flex'; $('bar').style.display = 'none';
     if (tg.MainButton) tg.MainButton.hide();
-    $('doneBtn').onclick = () => tg.close();
+    $('doneBtn').onclick = () => { track('done_ok'); flushEv(); setTimeout(() => tg.close(), 300); };
     return;
   }
   if (r && j.error) { sending = false; updBar(); return fail(j.error); }
