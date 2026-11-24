@@ -211,6 +211,15 @@ function flushEv(final) {
     try { navigator.sendBeacon(EV_URL, new Blob([body], {type: 'text/plain'})); } catch (e2) {}
   }
 }
+// ✍️ что клиент ввёл в поле — отправляем, когда он ушёл из поля (перешёл к следующему)
+[['phone', 'Телефон'], ['addr', 'Адрес'], ['comment', 'Комментарий']].forEach(([id, label]) => {
+  let last = '';
+  $(id).addEventListener('change', () => {
+    const v = $(id).value.trim();
+    if (v === last) return;
+    last = v; track('input', `${label}: ${v || '(стёр)'}`);
+  });
+});
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { track('close'); flushEv(); } });
 
 fetch('menu.json').then(r => r.json()).then(m => { M = m; init(); });
